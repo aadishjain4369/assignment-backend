@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 
 import { validatePlainObject } from './utils.js';
 
-/** API copy shown once when enabling / rotating HMAC. */
 export const SIGNING_SECRET_NOTE =
   'This is your Spenzia assignment secret. Save it now, as it can only be seen once. Send X-Webhook-Signature: sha256=<hex> (HMAC-SHA256 of the raw JSON body).';
 

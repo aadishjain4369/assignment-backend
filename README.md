@@ -22,7 +22,7 @@ This is an Express.js backend written in TypeScript that handles webhook subscri
 | Bonus: filtering / typing | **`processEventByType`** tags domains (billing, risk, inventory) from **`type`**. |
 | Bonus: signing | Optional **HMAC-SHA256** on raw JSON body (**`X-Webhook-Signature`**) when enabled per subscription. |
 | Bonus: message broker | **RabbitMQ** via **`RABBITMQ_URL`**; **`publishWebhookJob`** → queue + consumer, **inline fallback** if broker absent or down. |
-| API documentation | **OpenAPI 3** merged in **`openapi/spec.ts`**; path defs colocated in **`routes/`** (`authOpenApiPaths`, `webhooksOpenApiPaths`). **Swagger UI** at **`GET /api/swagger`**; raw JSON at **`GET /openapi.json`** and **`GET /api/openapi.json`**. |
+| API documentation | **Swagger UI** at **`GET /api/swagger`** — e.g. **`http://localhost:4000/api/swagger`**. |
 
 ---
 
@@ -78,17 +78,9 @@ npm run build && npm start
 
 Health check: **`GET /health`**.
 
-### OpenAPI & Swagger UI
+### Swagger docs
 
-Interactive docs (**Swagger UI**) live under the **`/api`** prefix:
-
-**[`http://localhost:4000/api/swagger`](http://localhost:4000/api/swagger)** (adjust host/port if your **`PORT`** differs).
-
-OpenAPI **path definitions are declared next to the Express routes** in **`src/routes/auth.ts`** and **`src/routes/webhooks.ts`** (`authOpenApiPaths`, `webhooksOpenApiPaths`). **`src/openapi/spec.ts`** merges those objects with **`info`**, **`servers`**, and **`components.securitySchemes`**.
-
-The merged document is exposed as JSON at **`GET /openapi.json`** (root) and **`GET /api/openapi.json`** (under **`/api`**).
-
-You can paste either URL or the downloaded JSON into **[Swagger Editor](https://editor.swagger.io/)**, Postman, or Insomnia.
+With the server running: **`http://localhost:4000/api/swagger`** (change host/port if **`PORT`** is not **4000**).
 
 ---
 
@@ -119,7 +111,7 @@ npm run simulate-webhooks
 
 ## API surface (summary)
 
-Authoritative paths, request bodies, and responses are in **OpenAPI** — open **`/api/swagger`** or **`/openapi.json`** / **`/api/openapi.json`** (see **OpenAPI & Swagger UI** above).
+Details for each endpoint are in **Swagger** (**`/api/swagger`** above).
 
 - **`/api/auth`** — register, login → JWT.
 - **`/api/webhooks`** — subscriptions (create/list/cancel), signing rotation, **feed** query, **SSE stream**, inbound **`.../events`**.
@@ -134,7 +126,7 @@ Ingest authentication uses the **per-subscription ingest key**, not the user JWT
 
 **Flow — outbound:** Worker/timer picks due deliveries → **`fetch`** POST with envelope → on failure, schedule **retry** per **`deliveryService`** rules.
 
-**Code layout:** Thin **`controllers`** + **`routes`** (each router file exports **`openApiPaths`** merged by **`openapi/spec.ts`**); **`services`** (**`webhooksSubscriptions.service`**, **`webhooksIngest.service`**, **`authService`**, **`deliveryService`**, **`brokerService`**, **`processIngestJob`**); HTTP helpers in **`lib/webhooksHttp.ts`**.
+**Code layout:** Thin **`controllers`** + **`routes`**; **`services`** (**`webhooksSubscriptions.service`**, **`webhooksIngest.service`**, **`authService`**, **`deliveryService`**, **`brokerService`**, **`processIngestJob`**); HTTP helpers in **`lib/webhooksHttp.ts`**.
 
 **Security:** Rate limiting on ingest; JWT for management APIs; optional inbound HMAC; CORS restricted to **`FRONTEND_ORIGIN`**.
 
