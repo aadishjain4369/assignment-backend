@@ -91,6 +91,8 @@ With the server running: **`http://localhost:4000/api/swagger`** (change host/po
 
 **Ingest key only** (signing off):
 
+macOS / Linux (bash):
+
 ```bash
 cd assignment-backend   # from monorepo root; omit if you’re already in this directory
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
@@ -98,13 +100,53 @@ export WEBHOOK_SOURCE='my-source'
 npm run simulate-webhooks
 ```
 
+Windows (PowerShell):
+
+```powershell
+cd assignment-backend   # from monorepo root; omit if you’re already in this directory
+$env:WEBHOOK_INGEST_KEY = 'paste-ingest-key-here'
+$env:WEBHOOK_SOURCE = 'my-source'
+npm run simulate-webhooks
+```
+
+Windows (Command Prompt):
+
+```bat
+cd assignment-backend
+set WEBHOOK_INGEST_KEY=paste-ingest-key-here
+set WEBHOOK_SOURCE=my-source
+npm run simulate-webhooks
+```
+
 **Signing enabled** (paste the **signing secret** from the modal when you enabled signing—and keep **`WEBHOOK_SOURCE`** aligned with that subscription):
+
+macOS / Linux (bash):
 
 ```bash
 cd assignment-backend   # from monorepo root; omit if you’re already in this directory
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
 export WEBHOOK_SIGNING_SECRET='paste-signing-secret-hex-here'
 export WEBHOOK_SOURCE='my-source'
+npm run simulate-webhooks
+```
+
+Windows (PowerShell):
+
+```powershell
+cd assignment-backend   # from monorepo root; omit if you’re already in this directory
+$env:WEBHOOK_INGEST_KEY = 'paste-ingest-key-here'
+$env:WEBHOOK_SIGNING_SECRET = 'paste-signing-secret-hex-here'
+$env:WEBHOOK_SOURCE = 'my-source'
+npm run simulate-webhooks
+```
+
+Windows (Command Prompt):
+
+```bat
+cd assignment-backend
+set WEBHOOK_INGEST_KEY=paste-ingest-key-here
+set WEBHOOK_SIGNING_SECRET=paste-signing-secret-hex-here
+set WEBHOOK_SOURCE=my-source
 npm run simulate-webhooks
 ```
 
