@@ -1,9 +1,9 @@
 import cors from 'cors';
 import express, { type Request } from 'express';
+import swaggerUi from 'swagger-ui-express';
 
-import openApiDocument from './openapi/openapi.json' with { type: 'json' };
+import { openApiDocument } from './openapi/spec.js';
 import { errorMiddleware } from './middleware/errorMiddleware.js';
-import { ingestRateLimit } from './middleware/ingestRateLimit.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { authRouter } from './routes/auth.js';
 import { webhookRouter } from './routes/webhooks.js';
@@ -35,6 +35,12 @@ export function createApp(): express.Express {
   app.get('/openapi.json', (_req, res) => {
     res.json(openApiDocument);
   });
+
+  app.get('/api/openapi.json', (_req, res) => {
+    res.json(openApiDocument);
+  });
+
+  app.use('/api/swagger', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
   app.use('/api/auth', authRouter);
   app.use('/api/webhooks', webhookRouter);
