@@ -4,7 +4,7 @@ import { validatePlainObject } from './utils.js';
 
 /** API copy shown once when enabling / rotating HMAC. */
 export const SIGNING_SECRET_NOTE =
-  'Save this secret now; it is not shown again. Send X-Webhook-Signature: sha256=<hex> (HMAC-SHA256 of the raw JSON body).';
+  'This is your Spenzia assignment secret. Save it now, as it can only be seen once. Send X-Webhook-Signature: sha256=<hex> (HMAC-SHA256 of the raw JSON body).';
 
 export const SSE_READY_EVENT = `event: ready\ndata: {}\n\n`;
 
