@@ -9,9 +9,6 @@ let connection: Awaited<ReturnType<typeof amqp.connect>> | null = null;
 let channel: amqp.Channel | null = null;
 let connectFailureLogged = false;
 
-/**
- * Normalizes the AMQP URL, converting localhost and ::1 to 127.0.0.1 for better compatibility.
- */
 function normalizeAmqpUrl(urlStr: string): string {
   try {
     const url = new URL(urlStr);
@@ -24,16 +21,10 @@ function normalizeAmqpUrl(urlStr: string): string {
   }
 }
 
-/**
- * Checks if the broker (RabbitMQ) should be used by verifying the RABBITMQ_URL environment variable.
- */
 function isBrokerEnabled(): boolean {
   return Boolean(process.env.RABBITMQ_URL?.trim());
 }
 
-/**
- * Gets or creates a channel to the RabbitMQ broker. Handles connection and channel errors gracefully.
- */
 async function getChannel(): Promise<amqp.Channel | null> {
   if (!isBrokerEnabled()) {
     return null;
@@ -86,11 +77,6 @@ async function getChannel(): Promise<amqp.Channel | null> {
   }
 }
 
-/**
- * Publishes a webhook job to the broker queue, or processes inline if broker is unavailable.
- * @param job The webhook job to publish.
- * @returns "queued" if successfully queued, otherwise delegates to inline processing.
- */
 export async function publishWebhookJob(job: WebhookQueueJob): Promise<string> {
   const ch = await getChannel();
   if (!ch) {
@@ -110,11 +96,6 @@ export async function publishWebhookJob(job: WebhookQueueJob): Promise<string> {
   }
 }
 
-/**
- * Starts a consumer that processes jobs from the webhook queue using the provided handler.
- * Falls back to inline ingest if the broker is not available.
- * @param handler Asynchronous handler to process each WebhookQueueJob.
- */
 export async function startWebhookConsumer(
   handler: (job: WebhookQueueJob) => Promise<string | void>
 ): Promise<void> {

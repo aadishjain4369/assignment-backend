@@ -14,8 +14,6 @@ function requireEnv(name: string): string {
   return v;
 }
 
-// ─── Users (credentials) ───────────────────────────────────────────────────
-
 export async function createUser(
   email: string,
   password: string
@@ -35,8 +33,6 @@ export async function verifyPassword(
 ): Promise<boolean> {
   return bcrypt.compare(password, passwordHash);
 }
-
-// ─── JWT ───────────────────────────────────────────────────────────────────
 
 export function signAuthToken(userId: string): string {
   const secret = requireEnv('JWT_SECRET');

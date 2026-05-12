@@ -11,13 +11,14 @@ import {
   SSE_READY_EVENT,
   subscriptionResponseBody,
 } from '../lib/webhooksHttp.js';
-import * as webhookService from '../services/webhooks.service.js';
+import * as webhookIngest from '../services/webhooksIngest.service.js';
+import * as webhookSubscriptions from '../services/webhooksSubscriptions.service.js';
 
 export const subscribe = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireAuthUserId(req, res);
   if (!userId) return;
 
-  const result = await webhookService.subscribe(req.body, userId);
+  const result = await webhookSubscriptions.subscribe(req.body, userId);
   if (!result.ok) {
     replyError(res, result.status, result.json);
     return;
@@ -31,7 +32,7 @@ export const updateSigning = asyncHandler(async (req: Request, res: Response) =>
   if (!userId) return;
 
   const source = routeSourceParam(req.params);
-  const result = await webhookService.updateSigning(req.body, userId, source);
+  const result = await webhookSubscriptions.updateSigning(req.body, userId, source);
   if (!result.ok) {
     replyError(res, result.status, result.json);
     return;
@@ -44,7 +45,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireAuthUserId(req, res);
   if (!userId) return;
 
-  const items = await webhookService.list(userId);
+  const items = await webhookSubscriptions.list(userId);
   res.json({ items });
 });
 
@@ -53,7 +54,7 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
   if (!userId) return;
 
   const source = routeSourceParam(req.params);
-  const result = await webhookService.cancel(source, userId);
+  const result = await webhookSubscriptions.cancel(source, userId);
   if (!result.ok) {
     replyError(res, result.status, result.json);
     return;
@@ -66,7 +67,7 @@ export const feed = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireAuthUserId(req, res);
   if (!userId) return;
 
-  const result = await webhookService.feed(userId, {
+  const result = await webhookSubscriptions.feed(userId, {
     limitRaw: Number(req.query.limit),
     eventType: optionalQueryString(req.query, 'eventType'),
     source: optionalQueryString(req.query, 'source'),
@@ -101,7 +102,7 @@ export const streamFeed = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const ingest = asyncHandler(async (req: Request, res: Response) => {
-  const result = await webhookService.handleIncomingEvent(
+  const result = await webhookIngest.handleIncomingEvent(
     req.body,
     headerValue(req.headers, 'x-webhook-source'),
     headerValue(req.headers, 'x-ingest-key'),

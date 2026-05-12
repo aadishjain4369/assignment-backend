@@ -9,12 +9,12 @@ This is an Express.js backend written in TypeScript that handles webhook subscri
 | Requirement | What we implemented |
 |-------------|---------------------|
 | Node HTTP server | **Express** (`createApp`, routers under **`routes/`**, **`controllers/`** handlers). |
-| Subscribe | **`POST /api/webhooks/subscriptions`** (JWT): upserts by **source** (logical sender label), optional **callback URL**, optional inbound signing; returns **ingest key** used when posting events. |
+| Subscribe | **`POST /api/webhooks/subscriptions`** (JWT): **`webhooksSubscriptions.service`** upserts by **source**, optional **callback URL**, optional inbound signing; returns **ingest key**. |
 | List subscriptions | **`GET /api/webhooks/subscriptions`** (JWT). |
-| Incoming events | **`POST /api/webhooks/events`**: resolves subscription via **`X-Ingest-Key`** or JSON **`ingestKey`**; validates payload (Zod); queues or processes job; persists **`WebhookEvent`**; queues outbound POST to **callback URL** when set. |
+| Incoming events | **`POST /api/webhooks/events`**: **`webhooksIngest.service`** **`handleIncomingEvent`** — ingest key / optional HMAC; **`publishWebhookJob`**; persists **`WebhookEvent`**; queues outbound POST when **callback URL** is set. |
 | Database | **MongoDB** + Mongoose — **`WebhookSubscription`**, **`WebhookEvent`**. |
 | JWT auth | **`/api/auth/register`**, **`/api/auth/login`**; **`authMiddleware`** secures webhook dashboard routes (**Bearer**). SSE uses **query token** because browsers cannot send headers on **`EventSource`**. |
-| Process & store events | **`webhooks.service`**, **`processIngestJob`** — classify/tag by event **`type`**, save normalized record linked to **userId**. |
+| Process & store events | **`webhooksIngest.service`** (**`processEventByType`**), **`processIngestJob`** — classify/tag by event **`type`**, save normalized record linked to **userId**. |
 | Validation & errors | **Zod** schemas (**`validation/schemas.ts`**); consistent JSON errors via **`errorMiddleware`** / service **`Fail`** types. |
 | Retry failed deliveries | **`deliveryService`** tracks attempts **`processDueDeliveries`** interval + backoff scheduling from **`index.ts`**. |
 | Cancel subscription | **`DELETE`** / deactivate endpoint pattern (**cancel** by source, JWT) — subscription marked inactive. |
@@ -120,7 +120,7 @@ Ingest authentication uses the **per-subscription ingest key**, not the user JWT
 
 **Flow — outbound:** Worker/timer picks due deliveries → **`fetch`** POST with envelope → on failure, schedule **retry** per **`deliveryService`** rules.
 
-**Code layout:** Thin **`controllers`** + **`routes`**; **`services`** (**`webhooks.service`**, **`authService`**, **`deliveryService`**, **`brokerService`**, **`processIngestJob`**); HTTP helpers in **`lib/webhooksHttp.ts`**.
+**Code layout:** Thin **`controllers`** + **`routes`**; **`services`** (**`webhooksSubscriptions.service`**, **`webhooksIngest.service`**, **`authService`**, **`deliveryService`**, **`brokerService`**, **`processIngestJob`**); HTTP helpers in **`lib/webhooksHttp.ts`**.
 
 **Security:** Rate limiting on ingest; JWT for management APIs; optional inbound HMAC; CORS restricted to **`FRONTEND_ORIGIN`**.
 
