@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 
 import mongoose from 'mongoose';
 
@@ -10,16 +10,83 @@ import {
 } from '../lib/webhookParseUtils.js';
 import { WebhookEvent } from '../models/webhookEvent.js';
 import { WebhookSubscription } from '../models/webhookSubscription.js';
-import { publishWebhookJob } from './brokerService.js';
-import { verifyWebhookSignature } from './webhookSignature.js';
+import type { WebhookQueueJob } from '../types/webhookQueueJob.js';
 import {
   incomingEventBodySchema,
   signingActionSchema,
   subscribeBodySchema,
 } from '../validation/schemas.js';
-import type { WebhookQueueJob } from '../types/webhookQueueJob.js';
+import { publishWebhookJob } from './brokerService.js';
 
 type Fail = ServiceFail;
+
+// ─── Inbound HMAC (raw body) ───────────────────────────────────────────────
+
+const SIGNATURE_PREFIX = 'sha256=';
+
+function computeInboundSignature(secret: string, rawBody: Buffer): string {
+  const h = createHmac('sha256', secret).update(rawBody).digest('hex');
+  return `${SIGNATURE_PREFIX}${h}`;
+}
+
+function verifyInboundSignature(
+  secret: string,
+  rawBody: Buffer,
+  headerValue: string | undefined
+): { ok: true } | { ok: false; reason: string } {
+  if (!headerValue || typeof headerValue !== 'string') {
+    return { ok: false, reason: 'Missing X-Webhook-Signature header' };
+  }
+
+  const trimmed = headerValue.trim();
+  if (!trimmed.startsWith(SIGNATURE_PREFIX)) {
+    return {
+      ok: false,
+      reason: `Signature must start with ${SIGNATURE_PREFIX}`,
+    };
+  }
+
+  const receivedHex = trimmed.slice(SIGNATURE_PREFIX.length);
+  const expected = computeInboundSignature(secret, rawBody).slice(SIGNATURE_PREFIX.length);
+
+  const a = Buffer.from(receivedHex, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { ok: false, reason: 'Invalid signature' };
+  }
+
+  return { ok: true };
+}
+
+// ─── Event-type tagging (demo classifier for stored events) ────────────────
+
+export type ProcessResult = { tags: string[]; note?: string };
+
+const BILLING_TYPES = new Set([
+  'order.paid',
+  'invoice.finalized',
+  'refund.processed',
+  'subscription.updated',
+]);
+
+const RISK_TYPES = new Set(['payment.failed', 'api_key.rotated']);
+
+const INVENTORY_TYPES = new Set(['inventory.low_stock', 'shipment.shipped']);
+
+export function processEventByType(
+  eventType: string,
+  _payload: Record<string, unknown>
+): ProcessResult {
+  const tags: string[] = [`type:${eventType}`];
+
+  if (BILLING_TYPES.has(eventType)) tags.push('domain:billing');
+  if (RISK_TYPES.has(eventType)) tags.push('domain:risk');
+  if (INVENTORY_TYPES.has(eventType)) tags.push('domain:inventory');
+
+  return { tags, note: 'filtered' };
+}
+
+// ─── Subscriptions & ingest ────────────────────────────────────────────────
 
 export async function subscribe(
   body: unknown,
@@ -273,7 +340,7 @@ export async function handleIncomingEvent(
         },
       };
     }
-    const sig = verifyWebhookSignature(
+    const sig = verifyInboundSignature(
       subscribed.signingSecret,
       rawBody,
       headerSignature

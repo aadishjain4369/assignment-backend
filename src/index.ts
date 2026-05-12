@@ -7,8 +7,8 @@ import { startWebhookConsumer } from './services/brokerService.js';
 import { processDueDeliveries } from './services/deliveryService.js';
 import { processQueuedWebhook } from './services/processIngestJob.js';
 
-const port = Number(process.env.PORT) || 3000;
-const mongoUri = process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/spezia';
+const port = Number(process.env.PORT) || 4000;
+const mongoUri = process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/webhooks';
 
 async function main(): Promise<void> {
   if (!process.env.JWT_SECRET) {

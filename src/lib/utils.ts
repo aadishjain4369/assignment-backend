@@ -47,3 +47,13 @@ export function validationError(err: unknown): ServiceFail | null {
   }
   return null;
 }
+
+/**
+ * Treat `unknown` JSON/service values as a plain object for safe spreading.
+ * Returns `{}` for `null`, arrays, and primitives.
+ */
+export function validatePlainObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}

@@ -2,104 +2,97 @@ import type { Request, Response } from 'express';
 
 import { asyncHandler, headerValue } from '../lib/utils.js';
 import { subscribeFeed } from '../realtime/feedHub.js';
-import * as webhooks from '../services/webhooks.service.js';
+import {
+  optionalQueryString,
+  prepareEventStreamHeaders,
+  replyError,
+  requireAuthUserId,
+  routeSourceParam,
+  SSE_READY_EVENT,
+  subscriptionResponseBody,
+} from '../lib/webhooksHttp.js';
+import * as webhookService from '../services/webhooks.service.js';
 
-function subscriptionJson(
-  subscription: unknown,
-  signingSecret?: string
-): Record<string, unknown> {
-  const base =
-    subscription && typeof subscription === 'object' && !Array.isArray(subscription)
-      ? { ...(subscription as Record<string, unknown>) }
-      : {};
-  if (signingSecret) {
-    base.signingSecret = signingSecret;
-    base.signingSecretNote =
-      'Save this secret now; it is not shown again. Send X-Webhook-Signature: sha256=<hex> (HMAC-SHA256 of the raw JSON body).';
-  }
-  return base;
-}
+export const subscribe = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
 
-function userId(req: Request, res: Response): string | undefined {
-  const id = req.auth?.sub;
-  if (!id) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return undefined;
-  }
-  return id;
-}
-
-export const subscribe = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
-
-  const out = await webhooks.subscribe(req.body, uid);
-  if (!out.ok) {
-    res.status(out.status).json(out.json);
+  const result = await webhookService.subscribe(req.body, userId);
+  if (!result.ok) {
+    replyError(res, result.status, result.json);
     return;
   }
-  res.status(200).json(subscriptionJson(out.subscription, out.signingSecret));
+
+  res.status(200).json(subscriptionResponseBody(result.subscription, result.signingSecret));
 });
 
-export const updateSigning = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
+export const updateSigning = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
 
-  const source = decodeURIComponent(String(req.params.source ?? ''));
-  const out = await webhooks.updateSigning(req.body, uid, source);
-  if (!out.ok) {
-    res.status(out.status).json(out.json);
+  const source = routeSourceParam(req.params);
+  const result = await webhookService.updateSigning(req.body, userId, source);
+  if (!result.ok) {
+    replyError(res, result.status, result.json);
     return;
   }
-  res.status(200).json(subscriptionJson(out.subscription, out.signingSecret));
+
+  res.status(200).json(subscriptionResponseBody(result.subscription, result.signingSecret));
 });
 
-export const list = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
+export const list = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
 
-  res.json({ items: await webhooks.list(uid) });
+  const items = await webhookService.list(userId);
+  res.json({ items });
 });
 
-export const feed = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
+export const cancel = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
 
-  const limit = Number(req.query.limit);
-  const eventType =
-    typeof req.query.eventType === 'string' ? req.query.eventType : undefined;
-  const source = typeof req.query.source === 'string' ? req.query.source : undefined;
-  const before = typeof req.query.before === 'string' ? req.query.before : undefined;
+  const source = routeSourceParam(req.params);
+  const result = await webhookService.cancel(source, userId);
+  if (!result.ok) {
+    replyError(res, result.status, result.json);
+    return;
+  }
 
-  const out = await webhooks.feed(uid, {
-    limitRaw: limit,
-    eventType,
-    source,
-    before,
+  res.status(200).json(result.subscription);
+});
+
+export const feed = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
+
+  const result = await webhookService.feed(userId, {
+    limitRaw: Number(req.query.limit),
+    eventType: optionalQueryString(req.query, 'eventType'),
+    source: optionalQueryString(req.query, 'source'),
+    before: optionalQueryString(req.query, 'before'),
   });
-  if (!out.ok) {
-    res.status(out.status).json(out.json);
+
+  if (!result.ok) {
+    replyError(res, result.status, result.json);
     return;
   }
-  res.json({ items: out.items });
+
+  res.json({ items: result.items });
 });
 
-export const streamFeed = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
+export const streamFeed = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireAuthUserId(req, res);
+  if (!userId) return;
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+  prepareEventStreamHeaders(res);
 
-  const write = (chunk: string) => {
+  const send = (chunk: string) => {
     res.write(chunk);
   };
 
-  const unsubscribe = subscribeFeed(uid, write);
-
-  write(`event: ready\ndata: {}\n\n`);
+  const unsubscribe = subscribeFeed(userId, send);
+  send(SSE_READY_EVENT);
 
   req.on('close', () => {
     unsubscribe();
@@ -107,21 +100,8 @@ export const streamFeed = asyncHandler(async (req, res) => {
   });
 });
 
-export const cancel = asyncHandler(async (req, res) => {
-  const uid = userId(req, res);
-  if (!uid) return;
-
-  const source = decodeURIComponent(String(req.params.source ?? ''));
-  const out = await webhooks.cancel(source, uid);
-  if (!out.ok) {
-    res.status(out.status).json(out.json);
-    return;
-  }
-  res.status(200).json(out.subscription);
-});
-
-export const ingest = asyncHandler(async (req, res) => {
-  const out = await webhooks.handleIncomingEvent(
+export const ingest = asyncHandler(async (req: Request, res: Response) => {
+  const result = await webhookService.handleIncomingEvent(
     req.body,
     headerValue(req.headers, 'x-webhook-source'),
     headerValue(req.headers, 'x-ingest-key'),
@@ -130,17 +110,18 @@ export const ingest = asyncHandler(async (req, res) => {
     req.rawBody,
     req.requestId
   );
-  if (!out.ok) {
-    res.status(out.status).json(out.json);
+
+  if (!result.ok) {
+    replyError(res, result.status, result.json);
     return;
   }
 
-  const status = out.id === 'queued' ? 202 : 200;
-  res.status(status).json({
+  const statusCode = result.id === 'queued' ? 202 : 200;
+  res.status(statusCode).json({
     received: true,
-    id: out.id,
-    source: out.source,
-    eventType: out.eventType,
-    queued: out.id === 'queued',
+    id: result.id,
+    source: result.source,
+    eventType: result.eventType,
+    queued: result.id === 'queued',
   });
 });

@@ -3,7 +3,7 @@ import amqp from 'amqplib';
 import type { WebhookQueueJob } from '../types/webhookQueueJob.js';
 import { processQueuedWebhook } from './processIngestJob.js';
 
-export const WEBHOOK_QUEUE = 'spezia.webhook.incoming';
+export const WEBHOOK_QUEUE = 'app.webhook.incoming';
 
 let connection: Awaited<ReturnType<typeof amqp.connect>> | null = null;
 let channel: amqp.Channel | null = null;

@@ -8,7 +8,7 @@ import { WebhookSubscription } from '../models/webhookSubscription.js';
 import { broadcastFeedEvent } from '../realtime/feedHub.js';
 import type { WebhookQueueJob } from '../types/webhookQueueJob.js';
 import { queueOutboundIfNeeded } from './deliveryService.js';
-import { processEventByType } from './webhookProcessor.js';
+import { processEventByType } from './webhooks.service.js';
 
 type LeanEvent = {
   _id: mongoose.Types.ObjectId;
