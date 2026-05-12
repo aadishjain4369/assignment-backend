@@ -1,6 +1,6 @@
 # Webhook platform — backend
 
-Express.js + TypeScript API for **webhook subscriptions**, **authenticated dashboard routes**, **inbound event ingest**, **persisted event history**, and **retrying outbound deliveries** to subscriber callback URLs. MongoDB stores subscriptions and events; RabbitMQ is **optional** for asynchronous ingest processing.
+This is an Express.js backend written in TypeScript that handles webhook subscriptions, authentication for dashboard routes, receiving and storing incoming events, maintaining a full event history, and automatically retrying any failed outbound webhooks to user-specified callback URLs. Subscriptions and events are saved in MongoDB. For asynchronous event handling and better scalability, RabbitMQ can be enabled, but using it is optional.
 
 ---
 
@@ -82,9 +82,26 @@ npm run build && npm start
 
 ## Webhook simulation & manual testing
 
-Use **`npm run simulate-webhooks`** from this directory to register/login a test user, ensure a subscription exists, and POST batched sample events to **`POST /api/webhooks/events`**. Configure **`WEBHOOK_INGEST_KEY`**, **`WEBHOOK_SIGNING_SECRET`**, **`WEBHOOK_URL`**, etc. per **`scripts/README.md`**.
+1. In the dashboard, subscribe once for the **source** you want (e.g. `my-source`), then **copy the ingest key** for that row.
+2. From **this directory**, run the simulator. **`WEBHOOK_SOURCE`** must match that subscription’s source.
 
-You can also call **`POST /api/webhooks/events`** from Postman or curl with **`X-Ingest-Key`** (and signature headers when signing is on).
+**Ingest key only** (signing off):
+
+```bash
+export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
+export WEBHOOK_SOURCE='my-source'
+npm run simulate-webhooks
+```
+
+**Signing enabled** (paste the **signing secret** from the modal when you enabled signing—and keep **`WEBHOOK_SOURCE`** aligned with that subscription):
+
+```bash
+export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
+export WEBHOOK_SIGNING_SECRET='paste-signing-secret-hex-here'
+export WEBHOOK_SOURCE='my-source'
+npm run simulate-webhooks
+```
+
 
 ---
 
