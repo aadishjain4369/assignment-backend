@@ -87,11 +87,12 @@ With the server running: **`http://localhost:4000/api/swagger`** (change host/po
 ## Webhook simulation & manual testing
 
 1. In the dashboard, subscribe once for the **source** you want (e.g. `my-source`), then **copy the ingest key** for that row.
-2. From **this directory**, run the simulator. **`WEBHOOK_SOURCE`** must match that subscription’s source.
+2. Change to the backend package: **`cd assignment-backend`** from the monorepo root (skip if your shell is already the backend repo root). Then run the simulator. **`WEBHOOK_SOURCE`** must match that subscription’s source.
 
 **Ingest key only** (signing off):
 
 ```bash
+cd assignment-backend   # from monorepo root; omit if you’re already in this directory
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
 export WEBHOOK_SOURCE='my-source'
 npm run simulate-webhooks
@@ -100,6 +101,7 @@ npm run simulate-webhooks
 **Signing enabled** (paste the **signing secret** from the modal when you enabled signing—and keep **`WEBHOOK_SOURCE`** aligned with that subscription):
 
 ```bash
+cd assignment-backend   # from monorepo root; omit if you’re already in this directory
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
 export WEBHOOK_SIGNING_SECRET='paste-signing-secret-hex-here'
 export WEBHOOK_SOURCE='my-source'
