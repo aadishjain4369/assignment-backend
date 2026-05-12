@@ -7,8 +7,6 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "simulate-webhooks": "tsx scripts/simulate-webhooks.ts"
   },
   "engines": {
@@ -31,10 +29,7 @@
     "@types/cors": "^2.8.17",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.0",
-    "@types/supertest": "^7.2.0",
-    "supertest": "^7.2.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^4.1.6"
+    "typescript": "^5.7.2"
   }
 }

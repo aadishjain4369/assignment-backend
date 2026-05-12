@@ -18,12 +18,12 @@ Create a `.env` file with at least `MONGODB_URI` and `JWT_SECRET` (see table bel
 
 **Environment (typical)**
 
-| Variable | Description |
-|----------|-------------|
-| `MONGODB_URI` | e.g. `mongodb://127.0.0.1:27017/spezia` |
-| `JWT_SECRET` | Secret for signing auth tokens |
+| Variable       | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `MONGODB_URI`  | e.g. `mongodb://127.0.0.1:27017/spezia`              |
+| `JWT_SECRET`   | Secret for signing auth tokens                       |
 | `RABBITMQ_URL` | Optional; e.g. `amqp://spezia:spezia@127.0.0.1:5672` |
-| `PORT` | Server port (default `4000`) |
+| `PORT`         | Server port (default `4000`)                         |
 
 ## Docker (Mongo + RabbitMQ)
 
@@ -38,7 +38,6 @@ docker compose up -d
 ```bash
 npm run dev      # watch mode
 npm run build && npm start
-npm test
 ```
 
 ## Scripts

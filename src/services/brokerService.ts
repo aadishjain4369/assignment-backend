@@ -6,41 +6,56 @@ import { processQueuedWebhook } from './processIngestJob.js';
 export const WEBHOOK_QUEUE = 'spezia.webhook.incoming';
 
 let connection: Awaited<ReturnType<typeof amqp.connect>> | null = null;
+let channel: amqp.Channel | null = null;
+let connectFailureLogged = false;
 
+/**
+ * Normalizes the AMQP URL, converting localhost and ::1 to 127.0.0.1 for better compatibility.
+ */
 function normalizeAmqpUrl(urlStr: string): string {
   try {
-    const u = new URL(urlStr);
-    if (u.hostname === 'localhost' || u.hostname === '::1') {
-      u.hostname = '127.0.0.1';
+    const url = new URL(urlStr);
+    if (url.hostname === 'localhost' || url.hostname === '::1') {
+      url.hostname = '127.0.0.1';
     }
-    return u.toString();
+    return url.toString();
   } catch {
     return urlStr;
   }
 }
 
-function useBroker(): boolean {
+/**
+ * Checks if the broker (RabbitMQ) should be used by verifying the RABBITMQ_URL environment variable.
+ */
+function isBrokerEnabled(): boolean {
   return Boolean(process.env.RABBITMQ_URL?.trim());
 }
 
-let channel: amqp.Channel | null = null;
-
-let connectFailureLogged = false;
-
+/**
+ * Gets or creates a channel to the RabbitMQ broker. Handles connection and channel errors gracefully.
+ */
 async function getChannel(): Promise<amqp.Channel | null> {
-  if (!useBroker()) return null;
+  if (!isBrokerEnabled()) {
+    return null;
+  }
+
   const url = normalizeAmqpUrl(process.env.RABBITMQ_URL!.trim());
-  if (channel) return channel;
+
+  if (channel) {
+    return channel;
+  }
 
   try {
     if (!connection) {
       connection = await amqp.connect(url);
       connectFailureLogged = false;
+
       connection.on('error', (err) => {
         console.error('[rabbitmq] connection error', err);
         connection = null;
         channel = null;
       });
+
       connection.on('close', () => {
         connection = null;
         channel = null;
@@ -48,6 +63,7 @@ async function getChannel(): Promise<amqp.Channel | null> {
     }
 
     channel = await connection.createChannel();
+
     channel.on('error', (err) => {
       console.error('[rabbitmq] channel error', err);
       channel = null;
@@ -59,17 +75,22 @@ async function getChannel(): Promise<amqp.Channel | null> {
   } catch (err) {
     connection = null;
     channel = null;
+
     if (!connectFailureLogged) {
       connectFailureLogged = true;
-      console.warn(
-        '[rabbitmq] broker unreachable; ingests run inline until connection succeeds'
-      );
+      console.warn('[rabbitmq] broker unreachable; ingests run inline until connection succeeds');
       console.warn(err);
     }
+
     return null;
   }
 }
 
+/**
+ * Publishes a webhook job to the broker queue, or processes inline if broker is unavailable.
+ * @param job The webhook job to publish.
+ * @returns "queued" if successfully queued, otherwise delegates to inline processing.
+ */
 export async function publishWebhookJob(job: WebhookQueueJob): Promise<string> {
   const ch = await getChannel();
   if (!ch) {
@@ -77,20 +98,27 @@ export async function publishWebhookJob(job: WebhookQueueJob): Promise<string> {
   }
 
   try {
-    ch.sendToQueue(WEBHOOK_QUEUE, Buffer.from(JSON.stringify(job)), {
-      persistent: true,
-    });
+    ch.sendToQueue(
+      WEBHOOK_QUEUE,
+      Buffer.from(JSON.stringify(job)),
+      { persistent: true }
+    );
     return 'queued';
-  } catch (e) {
-    console.error('[rabbitmq] publish failed; ingest inline', e);
+  } catch (err) {
+    console.error('[rabbitmq] publish failed; ingest inline', err);
     return processQueuedWebhook(job);
   }
 }
 
+/**
+ * Starts a consumer that processes jobs from the webhook queue using the provided handler.
+ * Falls back to inline ingest if the broker is not available.
+ * @param handler Asynchronous handler to process each WebhookQueueJob.
+ */
 export async function startWebhookConsumer(
   handler: (job: WebhookQueueJob) => Promise<string | void>
 ): Promise<void> {
-  if (!useBroker()) {
+  if (!isBrokerEnabled()) {
     console.log('[rabbitmq] RABBITMQ_URL unset; ingests are synchronous');
     return;
   }
@@ -106,19 +134,20 @@ export async function startWebhookConsumer(
       WEBHOOK_QUEUE,
       async (msg) => {
         if (!msg) return;
+
         try {
           const job = JSON.parse(msg.content.toString()) as WebhookQueueJob;
           await handler(job);
           ch.ack(msg);
-        } catch (e) {
-          console.error('[rabbitmq] job failed', e);
+        } catch (err) {
+          console.error('[rabbitmq] job failed', err);
           ch.nack(msg, false, false);
         }
       },
       { noAck: false }
     );
-  } catch (e) {
-    console.error('[rabbitmq] consume failed', e);
+  } catch (err) {
+    console.error('[rabbitmq] consume failed', err);
     channel = null;
     return;
   }
