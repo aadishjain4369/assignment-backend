@@ -74,9 +74,6 @@ $env:WEBHOOK_SIGNING_SECRET = 'paste-signing-secret-hex-here'
 $env:WEBHOOK_SOURCE = 'my-source'
 npm run simulate-webhooks
 ```
-
-See `scripts/README.md` for additional options.
-
 ---
 
 ## How it works
