@@ -17,7 +17,6 @@ async function main(): Promise<void> {
 
   await mongoose.connect(mongoUri);
   console.log('MongoDB:', mongoUri.replace(/:[^:@]+@/, ':****@'));
-
   await startWebhookConsumer(processQueuedWebhook);
 
   setInterval(() => {

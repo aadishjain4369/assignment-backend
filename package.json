@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node -e \"const fs=require('fs');if(!fs.existsSync('.env')&&fs.existsSync('.env.example'))fs.copyFileSync('.env.example','.env')\" && tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "simulate-webhooks": "tsx scripts/simulate-webhooks.ts"

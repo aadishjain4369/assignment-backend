@@ -69,8 +69,9 @@ async function getChannel(): Promise<amqp.Channel | null> {
 
     if (!connectFailureLogged) {
       connectFailureLogged = true;
-      console.warn('[rabbitmq] broker unreachable; ingests run inline until connection succeeds');
-      console.warn(err);
+      console.warn(
+        '[rabbitmq] broker unreachable; ingests run inline until connection succeeds'
+      );
     }
 
     return null;
@@ -84,11 +85,7 @@ export async function publishWebhookJob(job: WebhookQueueJob): Promise<string> {
   }
 
   try {
-    ch.sendToQueue(
-      WEBHOOK_QUEUE,
-      Buffer.from(JSON.stringify(job)),
-      { persistent: true }
-    );
+    ch.sendToQueue(WEBHOOK_QUEUE, Buffer.from(JSON.stringify(job)), { persistent: true });
     return 'queued';
   } catch (err) {
     console.error('[rabbitmq] publish failed; ingest inline', err);
