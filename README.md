@@ -1,85 +1,138 @@
-# Webhook platform — backend
+## Webhook Platform — Backend
 
-Express + TypeScript service for webhook subscriptions (JWT dashboard), signed or key-based ingest, storing events in MongoDB, and retrying outbound delivery to callback URLs. **RabbitMQ** is optional: set `RABBITMQ_URL` to queue ingests; otherwise they run inline.
+An Express + TypeScript service that powers webhook subscription management, event ingestion, and outbound delivery — with MongoDB for storage and optional RabbitMQ for message queuing.
 
-## How to run
+Handles **JWT-authenticated** subscription APIs, **key or HMAC-signed** ingest, **MongoDB-backed** event storage, and **automatic retry** of outbound deliveries to callback URLs. RabbitMQ is opt-in — without it, everything runs inline.
 
-1. **Node.js 18+** and **MongoDB** available (default URI: `mongodb://127.0.0.1:27017/webhooks` unless you set `MONGODB_URI` in `.env`).
-2. Install dependencies: `npm install`
-3. Start dev (first run copies `.env` from `.env.example` if `.env` is missing): `npm run dev`
-4. **RabbitMQ (optional):** if you enable **`RABBITMQ_URL`** in `.env`, start the broker: `docker compose up -d` (Compose is RabbitMQ-only; see `docker-compose.yml`).
-5. **Checks:** `GET /health` · **API docs:** `http://localhost:4000/api/swagger` (adjust host/port if `PORT` ≠ 4000).
+---
 
-Production-style: `npm run build && npm start`
+## Getting Started
 
-## Simulate webhooks
-
-From the dashboard, create a subscription and copy its **ingest key**. **`WEBHOOK_SOURCE`** must match that subscription’s **source**. Run commands from the **`assignment-backend`** directory with the API already up (`npm run dev`).
-
-**macOS / Linux (bash)** — ingest key only:
+**Prerequisites:** Node.js 18+, MongoDB running locally (or set `MONGODB_URI`)
 
 ```bash
+# 1. Clone
+git clone https://github.com/aadishjain4369/assignment-backend.git
+cd assignment-backend
+
+# 2. Install dependencies
+npm install
+
+# 3. Start dev server — copies .env from .env.example on first run
+npm run dev
+```
+
+- Health check: `GET /health`
+- API docs (Swagger): `http://localhost:4000/api/swagger`
+
+**RabbitMQ (optional):** set `RABBITMQ_URL` in `.env`, then:
+
+```bash
+docker compose up -d   # starts broker only
+```
+
+Without it, ingests run inline automatically.
+
+**Production:**
+
+```bash
+npm run build && npm start
+```
+
+---
+
+## Simulating webhooks
+
+Create a subscription from the dashboard, copy its **ingest key** and **source**, then run from the project root (with the API already up):
+
+**macOS / Linux**
+
+```bash
+# Key only
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
 export WEBHOOK_SOURCE='my-source'
 npm run simulate-webhooks
-```
 
-**macOS / Linux (bash)** — if signing is enabled for that subscription (hex secret from the UI):
-
-```bash
+# With HMAC signing enabled
 export WEBHOOK_INGEST_KEY='paste-ingest-key-here'
 export WEBHOOK_SIGNING_SECRET='paste-signing-secret-hex-here'
 export WEBHOOK_SOURCE='my-source'
 npm run simulate-webhooks
 ```
 
-**Windows (PowerShell)** — ingest key only:
+**Windows (PowerShell)**
 
 ```powershell
+# Key only
 $env:WEBHOOK_INGEST_KEY = 'paste-ingest-key-here'
 $env:WEBHOOK_SOURCE = 'my-source'
 npm run simulate-webhooks
-```
 
-**Windows (PowerShell)** — with signing:
-
-```powershell
+# With HMAC signing enabled
 $env:WEBHOOK_INGEST_KEY = 'paste-ingest-key-here'
 $env:WEBHOOK_SIGNING_SECRET = 'paste-signing-secret-hex-here'
 $env:WEBHOOK_SOURCE = 'my-source'
 npm run simulate-webhooks
 ```
 
-## How this maps to the assignment
+See `scripts/README.md` for additional options.
 
-| Requirement               | What we implemented                                                                                                                       |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Node HTTP server          | **Express** — `createApp`, `routes/`, `controllers/`                                                                                      |
-| Subscribe                 | `POST /api/webhooks/subscriptions` (JWT) — `webhooksSubscriptions.service`; returns **ingest key**                                        |
-| List subscriptions        | `GET /api/webhooks/subscriptions` (JWT)                                                                                                   |
-| Incoming events           | `POST /api/webhooks/events` — ingest key / optional HMAC; `publishWebhookJob` → persist `WebhookEvent`; outbound queue if **callbackUrl** |
-| Database                  | **MongoDB** + Mongoose — `WebhookSubscription`, `WebhookEvent`                                                                            |
-| JWT auth                  | `/api/auth/register`, `/api/auth/login`; **Bearer** on management routes; SSE uses query token                                            |
-| Process & store events    | `webhooksIngest.service` (`processEventByType`), `processIngestJob`                                                                       |
-| Validation & errors       | **Zod** (`validation/schemas.ts`); `errorMiddleware` / service `Fail` types                                                               |
-| Retry failed deliveries   | `deliveryService` + `processDueDeliveries` interval in `index.ts`                                                                         |
-| Cancel subscription       | Deactivate by source (JWT)                                                                                                                |
-| Webhook simulation        | `npm run simulate-webhooks` — see **`scripts/README.md`**                                                                                 |
-| Bonus: filtering / typing | `processEventByType` tags by **type**                                                                                                     |
-| Bonus: signing            | Optional **HMAC-SHA256** (`X-Webhook-Signature`) per subscription                                                                         |
-| Bonus: message broker     | **RabbitMQ** via `RABBITMQ_URL`; inline fallback if broker off or down                                                                    |
-| API documentation         | **Swagger UI** at `GET /api/swagger`                                                                                                      |
+---
 
-## Explanation
+## How it works
 
-**Inbound:** `POST …/events` validates key/signature → `publishWebhookJob` (queue or inline) → `processQueuedWebhook` → save event → enqueue outbound POST when a callback URL exists.
+**Inbound:** `POST /api/webhooks/events` validates the ingest key and optional HMAC signature → enqueues or inline-processes the job → persists a `WebhookEvent` → queues an outbound POST if a callback URL is set.
 
-**Outbound:** A timer runs `processDueDeliveries`: POST envelope with **fetch**, backoff and retries per `deliveryService`.
+**Outbound:** A background timer runs `processDueDeliveries` on an interval — POSTs the event envelope to the callback URL with exponential backoff and configurable retries.
 
-**Layout:** Thin controllers and routes; logic in **`services/`** (`webhooksSubscriptions`, `webhooksIngest`, `auth`, `delivery`, **`brokerService`**, `processIngestJob`); helpers in `lib/webhooksHttp.ts`.
+---
 
-**Security:** Rate limit on ingest; JWT on dashboard APIs; optional inbound HMAC; CORS tied to **`FRONTEND_ORIGIN`**.
+## What's implemented
 
-**Simulator:** See **Simulate webhooks** above; extra env vars in **`scripts/README.md`**.
+| Feature | Details |
+|---|---|
+| **Subscribe** | `POST /api/webhooks/subscriptions` (JWT) — returns an ingest key |
+| **List subscriptions** | `GET /api/webhooks/subscriptions` (JWT) |
+| **Ingest events** | `POST /api/webhooks/events` — key or HMAC auth; persists payload; triggers outbound delivery |
+| **Retry delivery** | Background timer with backoff via `deliveryService` |
+| **Cancel subscription** | Deactivate by source (JWT) |
+| **JWT auth** | Register / login at `/api/auth`; Bearer on all management routes |
+| **Signing** | Optional per-subscription HMAC-SHA256 (`X-Webhook-Signature`) |
+| **Message broker** | RabbitMQ via `RABBITMQ_URL`; inline fallback if unavailable |
+| **Event typing** | `processEventByType` tags events by type |
+| **Validation** | Zod schemas; structured error middleware |
+| **API docs** | Swagger UI at `/api/swagger` |
 
-**Frontend:** Point the SPA’s **`VITE_API_URL`** at this API (e.g. `http://localhost:4000`) and match **`FRONTEND_ORIGIN`** to the Vite dev origin.
+---
+
+## Project structure
+
+```
+src/
+├── controllers/        # Thin route handlers
+├── routes/             # Express routers
+├── services/
+│   ├── auth.service.ts
+│   ├── webhooksSubscriptions.service.ts
+│   ├── webhooksIngest.service.ts
+│   ├── delivery.service.ts
+│   ├── brokerService.ts
+│   └── processIngestJob.ts
+├── lib/
+│   └── webhooksHttp.ts # Shared HTTP helpers
+├── validation/
+│   └── schemas.ts      # Zod schemas
+└── index.ts            # App entry — delivery timer, server start
+```
+
+---
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `MONGODB_URI` | No | `mongodb://127.0.0.1:27017/webhooks` | MongoDB connection string |
+| `PORT` | No | `4000` | Server port |
+| `FRONTEND_ORIGIN` | Yes | — | Allowed CORS origin (e.g. `http://localhost:5173`) |
+| `JWT_SECRET` | Yes | — | Secret for signing tokens |
+| `RABBITMQ_URL` | No | — | Enables RabbitMQ if set; omit for inline mode |
